@@ -12,6 +12,10 @@ fn main() -> Result<(), String> {
     let xmas_count = count_non_palindrome(&grid, width, height, b"XMAS");
     println!("{xmas_count} occurences of 'XMAS'");
 
+    // I would probably kill anyone who names variables this way in production code
+    let x_mas_count = count_x_mas(&grid, width, height);
+    println!("{x_mas_count} occurences of an 'X' MAS");
+
     Ok(())
 }
 
@@ -140,6 +144,21 @@ fn count_non_palindrome(input: &[u8], width: usize, height: usize, word: &[u8]) 
         .sum()
 }
 
+fn count_x_mas(grid: &[u8], width: usize, height: usize) -> usize {
+    grid.iter()
+        .enumerate()
+        .map(|(i, c)| (i % width, i / width, *c))
+        .filter(|(x, y, c)| *c == b'A' && *x > 0 && *y > 0 && x + 1 < width && y + 1 < height)
+        .filter(|(x, y, _)| {
+            (grid[(y - 1) * width + x - 1] == b'M' && grid[(y + 1) * width + x + 1] == b'S'
+                || grid[(y - 1) * width + x - 1] == b'S' && grid[(y + 1) * width + x + 1] == b'M')
+                && (grid[(y - 1) * width + x + 1] == b'M' && grid[(y + 1) * width + x - 1] == b'S'
+                    || grid[(y - 1) * width + x + 1] == b'S'
+                        && grid[(y + 1) * width + x - 1] == b'M')
+        })
+        .count()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -167,5 +186,17 @@ MXMXAXMASX
 
         // then
         assert_eq!(count, 18);
+    }
+
+    #[test]
+    fn count_x_mas_works_for_example() {
+        // given
+        let (width, height, grid) = make_grid(INPUT).expect("expected well-formed input");
+
+        // when
+        let count = count_x_mas(&grid, width, height);
+
+        // then
+        assert_eq!(count, 9);
     }
 }
