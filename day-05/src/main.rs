@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::read_to_string;
@@ -13,7 +14,43 @@ fn main() -> Result<(), String> {
     let checksum = ordered_checksum(&updates, &rules);
     println!("The sum of the middle page number in correctly sorted updates is {checksum}");
 
+    let checksum = repaired_order_checksum(&updates, &rules);
+    println!("The sum of the middle page number of originally unsorted but now sorted updates is {checksum}");
+
     Ok(())
+}
+
+fn repaired_order_checksum(updates: &[Update], rules: &HashMap<u32, Vec<u32>>) -> u32 {
+    updates
+        .iter()
+        .filter(|update| !update.is_empty() && !is_update_sorted(update, rules))
+        .map(|update| {
+            let sorted = sort_update(update.clone(), rules);
+            sorted[sorted.len() / 2]
+        })
+        .sum()
+}
+
+fn sort_update(mut update: Box<[u32]>, rules: &HashMap<u32, Vec<u32>>) -> Box<[u32]> {
+    // this may yield a bad result or panic if the rules are inconsistent. I'm going to risk that
+    // here
+    // right now, this may also fail in other cases, because I don't take transitive rules
+    // into account yet
+    // PS (after submitting response): Wow, I did not expect that to work.
+    update.sort_by(|left, right| {
+        if left == right {
+            Ordering::Equal
+        } else if rules
+            .get(left)
+            .map(|r| r.contains(right))
+            .unwrap_or_else(|| !rules.get(right).map(|r| r.contains(left)).unwrap_or(true))
+        {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
+    });
+    update
 }
 
 fn ordered_checksum(updates: &[Update], rules: &HashMap<u32, Vec<u32>>) -> u32 {
@@ -126,5 +163,17 @@ mod test {
 
         // then
         assert_eq!(sum, 143);
+    }
+
+    #[test]
+    fn repaired_order_checksum_works_for_example() {
+        // given
+        let (rules, updates) = parse(EXAMPLE).expect("expected example input to parse");
+
+        // when
+        let sum = repaired_order_checksum(&updates, &rules);
+
+        // then
+        assert_eq!(sum, 123);
     }
 }
