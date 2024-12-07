@@ -12,7 +12,66 @@ fn main() -> Result<(), String> {
     let tcr = total_calibration_result(&equations);
     println!("the total calibration result is {tcr}");
 
+    let tcr = concat_calibration_result(&equations);
+    println!("the total calibration result (with concat) is {tcr}");
+
     Ok(())
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Op {
+    Add,
+    Mul,
+    Cat,
+}
+
+fn concat_calibration_result(equations: &[Equation]) -> u64 {
+    equations
+        .iter()
+        .filter(|(lhs, rhs)| possibly_valid_concat(*lhs, rhs))
+        .map(|(lhs, _)| *lhs)
+        .sum()
+}
+
+fn possibly_valid_concat(lhs: u64, rhs: &[u64]) -> bool {
+    if rhs.is_empty() {
+        return false;
+    }
+    let mut operators: Box<[Op]> = (0..(rhs.len() - 1)).map(|_| Op::Add).collect();
+    let mut has_next = true;
+    while has_next {
+        let mut result = rhs[0];
+        for (operand, operator) in rhs[1..].iter().zip(operators.iter()) {
+            result = match operator {
+                Op::Add => result + operand,
+                Op::Mul => result * operand,
+                Op::Cat => concat(result, *operand),
+            };
+        }
+        if result == lhs {
+            return true;
+        }
+        has_next = next_op(&mut operators);
+    }
+    false
+}
+
+fn next_op(operators: &mut [Op]) -> bool {
+    let mut carry = true;
+    let mut i = 0;
+    while carry && i < operators.len() {
+        (operators[i], carry) = match operators[i] {
+            Op::Add => (Op::Mul, false),
+            Op::Mul => (Op::Cat, false),
+            Op::Cat => (Op::Add, true),
+        };
+        i += 1;
+    }
+    !carry
+}
+
+fn concat(lhs: u64, rhs: u64) -> u64 {
+    lhs * 10u64.pow(rhs.checked_ilog10().unwrap_or(0) + 1) + rhs
 }
 
 fn total_calibration_result(equations: &[Equation]) -> u64 {
@@ -93,5 +152,67 @@ mod test {
 
         // then
         assert_eq!(tcr, 3749);
+    }
+
+    #[test]
+    fn concat_calibration_result_works_for_example() {
+        // given
+        let equations = parse(EXAMPLE).expect("expcted exampe input to parse");
+
+        // when
+        let tcr = concat_calibration_result(&equations);
+
+        // then
+        assert_eq!(tcr, 11387);
+    }
+
+    #[test]
+    fn test_concat() {
+        assert_eq!(concat(12, 345), 12345);
+        assert_eq!(concat(0, 345), 345);
+        assert_eq!(concat(12, 0), 120);
+    }
+
+    #[test]
+    fn next_op_works_for_round_trip() {
+        // given
+        let mut ops = [Op::Add, Op::Add];
+
+        // when/then
+        let fine = next_op(&mut ops);
+        assert!(fine); // This is fine.
+        assert_eq!(&ops, &[Op::Mul, Op::Add]);
+
+        let fine = next_op(&mut ops);
+        assert!(fine); // This is fine.
+        assert_eq!(&ops, &[Op::Cat, Op::Add]);
+
+        let fine = next_op(&mut ops);
+        assert!(fine); // This is fine.
+        assert_eq!(&ops, &[Op::Add, Op::Mul]);
+
+        let fine = next_op(&mut ops);
+        assert!(fine); // This is fine.
+        assert_eq!(&ops, &[Op::Mul, Op::Mul]);
+
+        let fine = next_op(&mut ops);
+        assert!(fine); // This is fine.
+        assert_eq!(&ops, &[Op::Cat, Op::Mul]);
+
+        let fine = next_op(&mut ops);
+        assert!(fine); // This is fine.
+        assert_eq!(&ops, &[Op::Add, Op::Cat]);
+
+        let fine = next_op(&mut ops);
+        assert!(fine); // This is fine.
+        assert_eq!(&ops, &[Op::Mul, Op::Cat]);
+
+        let fine = next_op(&mut ops);
+        assert!(fine); // This is fine.
+        assert_eq!(&ops, &[Op::Cat, Op::Cat]);
+
+        let fine = next_op(&mut ops);
+        assert!(!fine);
+        assert_eq!(&ops, &[Op::Add, Op::Add]);
     }
 }
