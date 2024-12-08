@@ -16,7 +16,40 @@ fn main() -> Result<(), String> {
         antinodes.len()
     );
 
+    let antinodes = find_resonant_antinodes(&map);
+    println!(
+        "{} unique locations within the map bounds contain an antinode when resonant harmonics are taken into account",
+        antinodes.len()
+    );
+
     Ok(())
+}
+
+fn find_resonant_antinodes(map: &Map) -> HashSet<(i64, i64)> {
+    let mut antinodes: HashSet<(i64, i64)> = HashSet::with_capacity(map.antennas.len() * 16);
+    for antennas in map.antennas.values() {
+        for (i, (x1, y1)) in antennas.iter().enumerate() {
+            for (x2, y2) in &antennas[i + 1..] {
+                let dx = x2 - x1;
+                let dy = y2 - y1;
+                let mut ax = *x2;
+                let mut ay = *y2;
+                while ax >= 0 && ay >= 0 && ax < map.width && ay < map.height {
+                    antinodes.insert((ax, ay));
+                    ax += dx;
+                    ay += dy;
+                }
+                ax = *x1;
+                ay = *y1;
+                while ax >= 0 && ay >= 0 && ax < map.width && ay < map.height {
+                    antinodes.insert((ax, ay));
+                    ax -= dx;
+                    ay -= dy;
+                }
+            }
+        }
+    }
+    antinodes
 }
 
 fn find_antinodes(map: &Map) -> HashSet<(i64, i64)> {
@@ -108,5 +141,17 @@ mod test {
 
         // then
         assert_eq!(antinodes.len(), 14);
+    }
+
+    #[test]
+    fn find_resonant_antinodes_works_for_example() {
+        // given
+        let map = parse(EXAMPLE).expect("expected example input to parse");
+
+        // when
+        let antinodes = find_resonant_antinodes(&map);
+
+        // then
+        assert_eq!(antinodes.len(), 34);
     }
 }
