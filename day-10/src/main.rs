@@ -13,6 +13,9 @@ fn main() -> Result<(), String> {
     let scores = find_all_valid_trails(&map);
     println!("The sum of scores of all trailheads is {scores}");
 
+    let ratings = rate_all_trailheads(&map);
+    println!("The sum of ratings of all trailheads is {ratings}");
+
     Ok(())
 }
 
@@ -59,6 +62,51 @@ fn find_valid_trails_from(map: &Map, start_x: usize, start_y: usize) -> usize {
     }
 
     tops.len()
+}
+
+fn rate_all_trailheads(map: &Map) -> usize {
+    map.tiles
+        .iter()
+        .enumerate()
+        .map(|(i, height)| {
+            if *height == 0 {
+                rate_trailhead(map, i % map.width, i / map.width)
+            } else {
+                0
+            }
+        })
+        .sum()
+}
+
+fn rate_trailhead(map: &Map, start_x: usize, start_y: usize) -> usize {
+    if start_x >= map.width || start_y >= map.height {
+        return 0;
+    }
+    let mut stack: Vec<(usize, usize)> = Vec::with_capacity(256);
+    stack.push((start_x, start_y));
+    let mut valid_trails: usize = 0;
+
+    while let Some((x, y)) = stack.pop() {
+        let height = map.get(x, y).unwrap();
+        if height == 9 {
+            valid_trails += 1;
+            continue;
+        }
+        if x > 0 && map.get(x - 1, y) == Some(height + 1) {
+            stack.push((x - 1, y));
+        }
+        if y > 0 && map.get(x, y - 1) == Some(height + 1) {
+            stack.push((x, y - 1));
+        }
+        if map.get(x + 1, y) == Some(height + 1) {
+            stack.push((x + 1, y));
+        }
+        if map.get(x, y + 1) == Some(height + 1) {
+            stack.push((x, y + 1));
+        }
+    }
+
+    valid_trails
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -129,5 +177,17 @@ mod test {
 
         // then
         assert_eq!(scores, 36);
+    }
+
+    #[test]
+    fn rate_all_trailheads_works_for_example() {
+        // given
+        let map = parse(EXAMPLE).expect("expected example input to parse");
+
+        // when
+        let ratings = rate_all_trailheads(&map);
+
+        // then
+        assert_eq!(ratings, 81);
     }
 }
