@@ -12,43 +12,59 @@ fn main() -> Result<(), String> {
     let machines = parse(&content)?;
 
     let price = min_tokens_for_all_prizes(&machines);
+    println!("The fewest tokens I would have to spend to win all possible prizes is {price}");
+
+    let fixed_machines = fix_machines(&machines);
+    let price = min_tokens_for_all_prizes(&fixed_machines);
     println!(
-        "The fewest tokens I would have to spend to win all possible prizes is {price}"
+        "The fewest tokens I would have to spend to win all possible prizes for the fixed machines is {price}"
     );
 
     Ok(())
 }
 
-fn min_tokens_for_all_prizes(machines: &[Machine]) -> u64 {
+fn fix_machines(machines: &[Machine]) -> Box<[Machine]> {
+    machines
+        .iter()
+        .map(|broken| Machine {
+            prize_x: broken.prize_x + 10_000_000_000_000,
+            prize_y: broken.prize_y + 10_000_000_000_000,
+            ..*broken
+        })
+        .collect()
+}
+
+fn min_tokens_for_all_prizes(machines: &[Machine]) -> i64 {
     machines.iter().filter_map(find_cheapest_solution).sum()
 }
 
-fn find_cheapest_solution(machine: &Machine) -> Option<u64> {
-    let mut price_to_win: Option<u64> = None;
-
-    for a in 0..100 {
-        if let Some(b) = find_b_presses(machine, a) {
-            let price = a * 3 + b;
-            if price_to_win.map(|p| p > price).unwrap_or(true) {
-                price_to_win = Some(price);
-            }
-        }
+fn find_cheapest_solution(machine: &Machine) -> Option<i64> {
+    // Today is math day. I used Pen & Paper to get these equations
+    let num = machine.prize_y * machine.a_x - machine.a_y * machine.prize_x;
+    let denom = machine.b_y * machine.a_x - machine.a_y * machine.b_x;
+    if num % denom != 0 {
+        return None;
     }
+    let b = num / denom;
+    if b < 0 {
+        return None;
+    }
+    let a = find_a_presses(machine, b)?;
 
-    price_to_win
+    Some(3 * a + b)
 }
 
-fn find_b_presses(machine: &Machine, a: u64) -> Option<u64> {
-    let x = machine.a_x * a;
+fn find_a_presses(machine: &Machine, b: i64) -> Option<i64> {
+    let x = machine.b_x * b;
     if x > machine.prize_x {
         return None;
     }
     let dx = machine.prize_x - x;
-    let b = dx / machine.b_x;
-    if x + b * machine.b_x == machine.prize_x
+    let a = dx / machine.a_x;
+    if x + a * machine.a_x == machine.prize_x
         && machine.a_y * a + machine.b_y * b == machine.prize_y
     {
-        Some(b)
+        Some(a)
     } else {
         None
     }
@@ -56,12 +72,12 @@ fn find_b_presses(machine: &Machine, a: u64) -> Option<u64> {
 
 #[derive(Copy, Clone, Debug)]
 struct Machine {
-    a_x: u64,
-    a_y: u64,
-    b_x: u64,
-    b_y: u64,
-    prize_x: u64,
-    prize_y: u64,
+    a_x: i64,
+    a_y: i64,
+    b_x: i64,
+    b_y: i64,
+    prize_x: i64,
+    prize_y: i64,
 }
 
 fn parse(input: &str) -> Result<Box<[Machine]>, String> {
@@ -84,45 +100,45 @@ fn parse_machine(block: &str) -> Result<Machine, String> {
         .strip_prefix("Button A: ")
         .and_then(|l| l.split_once(", "))
         .ok_or_else(|| format!("invalid format for button A: '{line_a}'"))?;
-    let a_x: u64 = a_x
+    let a_x: i64 = a_x
         .strip_prefix("X+")
         .ok_or_else(|| format!("invalid format for X in line '{line_a}'"))?
-        .parse::<u64>()
+        .parse::<i64>()
         .map_err(|e| format!("unable to parse value X in line '{line_a}': {e}"))?;
-    let a_y: u64 = a_y
+    let a_y: i64 = a_y
         .strip_prefix("Y+")
         .ok_or_else(|| format!("invalid format for Y in line '{line_a}'"))?
-        .parse::<u64>()
+        .parse::<i64>()
         .map_err(|e| format!("unable to parse value Y in line '{line_a}': {e}"))?;
 
     let (b_x, b_y) = line_b
         .strip_prefix("Button B: ")
         .and_then(|l| l.split_once(", "))
         .ok_or_else(|| format!("invalid format for button B: '{line_b}'"))?;
-    let b_x: u64 = b_x
+    let b_x: i64 = b_x
         .strip_prefix("X+")
         .ok_or_else(|| format!("invalid format for X in line '{line_b}'"))?
-        .parse::<u64>()
+        .parse::<i64>()
         .map_err(|e| format!("unable to parse value X in line '{line_b}': {e}"))?;
-    let b_y: u64 = b_y
+    let b_y: i64 = b_y
         .strip_prefix("Y+")
         .ok_or_else(|| format!("invalid format for Y in line '{line_b}'"))?
-        .parse::<u64>()
+        .parse::<i64>()
         .map_err(|e| format!("unable to parse value Y in line '{line_b}': {e}"))?;
 
     let (prize_x, prize_y) = line_prize
         .strip_prefix("Prize: ")
         .and_then(|l| l.split_once(", "))
         .ok_or_else(|| format!("invalid format for prize: '{line_prize}'"))?;
-    let prize_x: u64 = prize_x
+    let prize_x: i64 = prize_x
         .strip_prefix("X=")
         .ok_or_else(|| format!("invalid format for X in line '{line_prize}'"))?
-        .parse::<u64>()
+        .parse::<i64>()
         .map_err(|e| format!("unable to parse X value for prize in line '{line_prize}': {e}"))?;
-    let prize_y: u64 = prize_y
+    let prize_y: i64 = prize_y
         .strip_prefix("Y=")
         .ok_or_else(|| format!("invalid format for Y in line '{line_prize}'"))?
-        .parse::<u64>()
+        .parse::<i64>()
         .map_err(|e| format!("unable to parse Y value for prize in line '{line_prize}': {e}"))?;
 
     Ok(Machine {
