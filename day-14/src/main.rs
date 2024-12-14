@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::env;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -14,6 +16,11 @@ fn main() -> Result<(), String> {
     let safety_factor = safety_factor_after_time(&robots, 100, 101, 103);
     println!("the safety factor after 100s is {safety_factor}");
 
+    let tree_time = find_tree_config(&robots, 101, 103);
+    println!(
+        "Possible tree config after {tree_time} seconds. Please double-check the image above."
+    );
+
     Ok(())
 }
 
@@ -25,18 +32,12 @@ fn safety_factor_after_time(robots: &[Robot], t: i64, width: i64, height: i64) -
         .fold(
             (0u64, 0u64, 0u64, 0u64),
             |(mut q1, mut q2, mut q3, mut q4), robot| {
-                if robot.px < width / 2 {
-                    if robot.py < height / 2 {
-                        q1 += 1;
-                    } else if robot.py > height / 2 {
-                        q2 += 1;
-                    }
-                } else if robot.px > width / 2 {
-                    if robot.py < height / 2 {
-                        q3 += 1;
-                    } else if robot.py > height / 2 {
-                        q4 += 1;
-                    }
+                match (robot.px.cmp(&(width / 2)), robot.py.cmp(&(height / 2))) {
+                    (Ordering::Less, Ordering::Less) => q1 += 1,
+                    (Ordering::Less, Ordering::Greater) => q2 += 1,
+                    (Ordering::Greater, Ordering::Less) => q3 += 1,
+                    (Ordering::Greater, Ordering::Greater) => q4 += 1,
+                    _ => (),
                 }
                 (q1, q2, q3, q4)
             },
@@ -48,6 +49,41 @@ fn move_robot(robot: Robot, t: i64, width: i64, height: i64) -> Robot {
     let px = (robot.px + t * robot.vx).rem_euclid(width);
     let py = (robot.py + t * robot.vy).rem_euclid(height);
     Robot { px, py, ..robot }
+}
+
+fn print_robots(robot_pos: &HashSet<(i64, i64)>, width: i64, height: i64) {
+    for y in 0..height {
+        for x in 0..width {
+            if robot_pos.contains(&(x, y)) {
+                print!("R");
+            } else {
+                print!(" ");
+            }
+        }
+        println!();
+    }
+}
+
+fn n_robots_in_a_row(robot_pos: &HashSet<(i64, i64)>, n: i64) -> bool {
+    robot_pos
+        .iter()
+        .any(|(px, py)| (1..=n).all(|dx| robot_pos.contains(&(px + dx, *py))))
+}
+
+fn find_tree_config(robots: &[Robot], width: i64, height: i64) -> i64 {
+    let mut robot_pos: HashSet<(i64, i64)> =
+        robots.iter().map(|robot| (robot.px, robot.py)).collect();
+    let mut time = 0;
+    while !n_robots_in_a_row(&robot_pos, 30) {
+        time += 1;
+        robot_pos.clear();
+        for robot in robots {
+            let trobot = move_robot(*robot, time, width, height);
+            robot_pos.insert((trobot.px, trobot.py));
+        }
+    }
+    print_robots(&robot_pos, width, height);
+    time
 }
 
 #[derive(Copy, Clone, Debug)]
