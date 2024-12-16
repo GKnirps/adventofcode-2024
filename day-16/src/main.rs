@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::env;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -13,8 +13,9 @@ fn main() -> Result<(), String> {
     let content = read_to_string(Path::new(&filename)).map_err(|e| e.to_string())?;
     let (maze, start, goal) = parse(&content)?;
 
-    if let Some(score) = winning_score(&maze, start, goal) {
-        println!("The lowest score is {score}");
+    if let Some((score, winning_path_tiles)) = winning_score(&maze, start, goal) {
+        println!("The lowest score is {score}.");
+        println!("There are {winning_path_tiles} tiles on winning paths");
     } else {
         println!("There is no path to the goal.");
     }
@@ -22,24 +23,57 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn winning_score(maze: &Maze, start: V2, goal: V2) -> Option<u32> {
+fn winning_score(maze: &Maze, start: V2, goal: V2) -> Option<(u32, usize)> {
     let mut queue: BinaryHeap<Candidate> = BinaryHeap::with_capacity(maze.width * maze.height);
-    let mut seen: HashSet<(V2, Dir)> = HashSet::with_capacity(maze.width * maze.height);
+    let mut seen: HashMap<(V2, Dir), (Vec<(V2, Dir)>, u32)> =
+        HashMap::with_capacity(maze.width * maze.height);
     queue.push(Candidate {
         cost: 0,
         pos: start,
         dir: Dir::East,
+        pred: None,
     });
+    let mut lowest_score: Option<u32> = None;
 
-    while let Some(Candidate { cost, pos, dir }) = queue.pop() {
+    while let Some(Candidate {
+        cost,
+        pos,
+        dir,
+        pred: predecessor,
+    }) = queue.pop()
+    {
         let (x, y) = pos;
-        if pos == goal {
-            return Some(cost);
+        if lowest_score.map(|s| s < cost).unwrap_or(false) {
+            let mut path_tiles: HashSet<V2> = HashSet::with_capacity(seen.len());
+            let mut stack: Vec<(V2, Dir)> = Vec::with_capacity(seen.len());
+            path_tiles.insert(goal);
+            stack.push((goal, Dir::East));
+            stack.push((goal, Dir::South));
+            stack.push((goal, Dir::West));
+            stack.push((goal, Dir::North));
+            while let Some(current) = stack.pop() {
+                path_tiles.insert(current.0);
+                if let Some((predecessors, _)) = seen.get(&current) {
+                    for pred in predecessors {
+                        stack.push(*pred);
+                    }
+                }
+            }
+
+            return Some((lowest_score.unwrap(), path_tiles.len()));
         }
-        if seen.contains(&(pos, dir)) {
+        if pos == goal {
+            lowest_score = Some(cost);
+        }
+        if let Some((predecessors, low_cost)) = seen.get_mut(&(pos, dir)) {
+            if *low_cost == cost {
+                if let Some(p) = predecessor {
+                    predecessors.push(p);
+                }
+            }
             continue;
         }
-        seen.insert((pos, dir));
+        seen.insert((pos, dir), (predecessor.iter().copied().collect(), cost));
         let neighbour = match dir {
             Dir::East => (x + 1, y),
             Dir::South => (x, y + 1),
@@ -51,17 +85,20 @@ fn winning_score(maze: &Maze, start: V2, goal: V2) -> Option<u32> {
                 cost: cost + 1,
                 pos: neighbour,
                 dir,
+                pred: Some((pos, dir)),
             });
         }
         queue.push(Candidate {
             cost: cost + 1000,
             pos,
             dir: dir.rot(),
+            pred: Some((pos, dir)),
         });
         queue.push(Candidate {
             cost: cost + 1000,
             pos,
             dir: dir.rot_counter(),
+            pred: Some((pos, dir)),
         });
     }
     None
@@ -72,6 +109,7 @@ struct Candidate {
     cost: u32,
     pos: V2,
     dir: Dir,
+    pred: Option<(V2, Dir)>,
 }
 
 impl Ord for Candidate {
@@ -79,9 +117,9 @@ impl Ord for Candidate {
         other
             .cost
             .cmp(&self.cost)
-            .then(self.pos.0.cmp(&other.pos.0))
-            .then(self.pos.1.cmp(&other.pos.1))
+            .then(self.pos.cmp(&other.pos))
             .then(self.dir.cmp(&other.dir))
+            .then(self.pred.cmp(&other.pred))
     }
 }
 
@@ -228,6 +266,6 @@ mod test {
         let score = winning_score(&maze, start, goal);
 
         // then
-        assert_eq!(score, Some(7036));
+        assert_eq!(score, Some((7036, 45)));
     }
 }
