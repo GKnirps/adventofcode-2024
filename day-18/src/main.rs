@@ -38,12 +38,22 @@ fn first_blocking_byte(
     width: u64,
     starting_len: usize,
 ) -> Option<(u64, u64)> {
-    for i in starting_len..bytes.len() {
-        if shortest_path_after_bytes(&bytes[0..i], width).is_none() {
-            return Some(bytes[i - 1]);
+    let mut lower = starting_len;
+    let mut upper = bytes.len();
+    while lower + 1 < upper {
+        let pivot = lower + (upper - lower) / 2;
+        if shortest_path_after_bytes(&bytes[..pivot], width).is_some() {
+            lower = pivot;
+        } else {
+            upper = pivot;
         }
     }
-    None
+
+    if upper == bytes.len() - 1 {
+        None
+    } else {
+        Some(bytes[lower])
+    }
 }
 
 fn shortest_path_after_bytes(bytes: &[(u64, u64)], width: u64) -> Option<u64> {
