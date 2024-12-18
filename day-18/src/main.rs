@@ -24,7 +24,26 @@ fn main() -> Result<(), String> {
         println!("No path to bottom right corner.");
     }
 
+    if let Some((x, y)) = first_blocking_byte(&bytes, 71, 1024) {
+        println!("the first blocking byte drops at {x},{y}");
+    } else {
+        println!("even if all bytes fall, we can still reach the bottom left corner");
+    }
+
     Ok(())
+}
+
+fn first_blocking_byte(
+    bytes: &[(u64, u64)],
+    width: u64,
+    starting_len: usize,
+) -> Option<(u64, u64)> {
+    for i in starting_len..bytes.len() {
+        if shortest_path_after_bytes(&bytes[0..i], width).is_none() {
+            return Some(bytes[i - 1]);
+        }
+    }
+    None
 }
 
 fn shortest_path_after_bytes(bytes: &[(u64, u64)], width: u64) -> Option<u64> {
@@ -115,5 +134,17 @@ mod test {
 
         // then
         assert_eq!(dist, Some(22));
+    }
+
+    #[test]
+    fn first_blocking_byte_works_for_example() {
+        // given
+        let bytes = parse(EXAMPLE).expect("expeced example input to parse");
+
+        // when
+        let i = first_blocking_byte(&bytes, 7, 13);
+
+        // then
+        assert_eq!(i, Some((6, 1)));
     }
 }
