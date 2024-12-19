@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -13,9 +13,45 @@ fn main() -> Result<(), String> {
     let (towels, designs) = parse(&content)?;
 
     let possible_designs = count_possible_designs(&designs, &towels);
-    println!("{possible_designs} designs are possible");
+    println!("{possible_designs} designs are possible.");
+
+    let option_count = sum_design_options(&designs, &towels);
+    println!("There are {option_count} ways to make designs");
 
     Ok(())
+}
+
+fn sum_design_options(designs: &[&str], towels: &HashSet<&str>) -> u64 {
+    let mut cache: HashMap<&str, u64> = HashMap::with_capacity(1024);
+    designs
+        .iter()
+        .map(|design| design_options(design, towels, &mut cache))
+        .sum()
+}
+
+fn design_options<'a>(
+    design: &'a str,
+    towels: &HashSet<&str>,
+    cache: &mut HashMap<&'a str, u64>,
+) -> u64 {
+    if let Some(n) = cache.get(design) {
+        return *n;
+    }
+    if design.is_empty() {
+        return 1;
+    }
+    let mut n = 0;
+    for subdesign in (1..=design.len()).filter_map(|i| design.get(i..)) {
+        if design
+            .strip_suffix(subdesign)
+            .map(|prefix| towels.contains(prefix))
+            .unwrap_or(false)
+        {
+            n += design_options(subdesign, towels, cache);
+        }
+    }
+    cache.insert(design, n);
+    n
 }
 
 fn count_possible_designs(designs: &[&str], towels: &HashSet<&str>) -> usize {
@@ -85,5 +121,17 @@ bbrgwb
 
         // then
         assert_eq!(count, 6);
+    }
+
+    #[test]
+    fn sum_design_options_works_for_example() {
+        // given
+        let (towels, designs) = parse(EXAMPLE).expect("expected example input to parse");
+
+        // when
+        let sum = sum_design_options(&designs, &towels);
+
+        // then
+        assert_eq!(sum, 16);
     }
 }
