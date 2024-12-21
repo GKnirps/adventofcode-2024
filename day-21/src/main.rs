@@ -12,8 +12,11 @@ fn main() -> Result<(), String> {
     let content = read_to_string(Path::new(&filename)).map_err(|e| e.to_string())?;
     let codes = parse(&content).ok_or_else(|| "unable to parse input".to_string())?;
 
-    let complexity = code_complexity(&codes);
+    let complexity = code_complexity(&codes, 2);
     println!("The sum of the complexities of the five codes is {complexity}");
+
+    let complexity = code_complexity(&codes, 25);
+    println!("The sum of complexities to rescue the second historian is {complexity}");
 
     Ok(())
 }
@@ -29,7 +32,7 @@ fn path_valid(graph: &[&[(usize, Dir)]], path: &[Dir], from: usize) -> bool {
     }
     true
 }
-fn code_complexity(codes: &[Box<[usize]>]) -> usize {
+fn code_complexity(codes: &[Box<[usize]>], n_dirpads: u64) -> usize {
     let numpad_paths: HashMap<usize, Paths> = (0..=10)
         .map(|from| {
             let mut paths = find_paths(NUMPAD_GRAPH, from);
@@ -58,13 +61,13 @@ fn code_complexity(codes: &[Box<[usize]>]) -> usize {
     codes
         .iter()
         .map(|code| {
-            let dirs = get_dirs(code, &numpad_paths, &dirpad_paths);
+            let dirs = get_dirs(code, &numpad_paths, &dirpad_paths, n_dirpads);
             let numeric_part: usize = code
                 .iter()
                 .skip_while(|c| **c == 0)
                 .take_while(|c| **c != 10)
                 .fold(0usize, |v, c| v * 10 + c);
-            dirs.len() * numeric_part
+            dirs * numeric_part
         })
         .sum()
 }
@@ -73,48 +76,73 @@ fn get_dirs(
     code: &[usize],
     numpad_paths: &HashMap<usize, Paths>,
     dirpad_paths: &HashMap<usize, Paths>,
-) -> Vec<usize> {
-    let mut numpad_dirs: Vec<usize> = Vec::with_capacity(5 * code.len());
+    n_dirpads: u64,
+) -> usize {
+    let numpad_dirs = get_numpad_dirs(code, numpad_paths);
+
+    let mut cache: HashMap<(u64, Vec<usize>), usize> = HashMap::with_capacity(1024);
+    let mut size = 0;
+    for section in &numpad_dirs {
+        size += get_dirs_internal(section, dirpad_paths, n_dirpads, &mut cache);
+    }
+    size
+}
+
+fn get_dirs_internal(
+    in_dirs: &[usize],
+    dirpad_paths: &HashMap<usize, Paths>,
+    n_dirpads: u64,
+    cache: &mut HashMap<(u64, Vec<usize>), usize>,
+) -> usize {
+    if n_dirpads == 0 {
+        return in_dirs.len();
+    }
+    // TODO: how do we get rid of this to_vec? May be an Rc?
+    if let Some(size) = cache.get(&(n_dirpads, in_dirs.to_vec())) {
+        return *size;
+    }
+    let mut size = 0;
+    for section in &get_dirpad_dirs(in_dirs, dirpad_paths) {
+        size += get_dirs_internal(section, dirpad_paths, n_dirpads - 1, cache);
+    }
+    cache.insert((n_dirpads, in_dirs.to_vec()), size);
+    size
+}
+
+fn get_numpad_dirs(code: &[usize], numpad_paths: &HashMap<usize, Paths>) -> Vec<Vec<usize>> {
+    let mut numpad_dirs: Vec<Vec<usize>> = Vec::with_capacity(5 * code.len());
     let mut pos = 10; // starting at button A
     for c in code {
-        for dir in &numpad_paths
-            .get(&pos)
-            .expect("expected all numpad paths in map")[*c]
-        {
-            numpad_dirs.push(dir.id());
-        }
-        numpad_dirs.push(4);
+        numpad_dirs.push(
+            numpad_paths
+                .get(&pos)
+                .expect("expected all numpad paths in map")[*c]
+                .iter()
+                .map(|dir| dir.id())
+                .chain(std::iter::once(4))
+                .collect(),
+        );
         pos = *c;
     }
-    let numpad_dirs = numpad_dirs;
+    numpad_dirs
+}
 
-    let mut dirpad1_dirs: Vec<usize> = Vec::with_capacity(3 * numpad_dirs.len());
+fn get_dirpad_dirs(src_dirs: &[usize], dirpad_paths: &HashMap<usize, Paths>) -> Vec<Vec<usize>> {
+    let mut dir_dirs: Vec<Vec<usize>> = Vec::with_capacity(3 * src_dirs.len());
     let mut pos = 4; // starting at button A
-    for c in &numpad_dirs {
-        for dir in &dirpad_paths
-            .get(&pos)
-            .expect("expected all dirpad paths in map")[*c]
-        {
-            dirpad1_dirs.push(dir.id());
-        }
-        dirpad1_dirs.push(4);
+    for c in src_dirs {
+        dir_dirs.push(
+            dirpad_paths
+                .get(&pos)
+                .expect("expected all dirpad paths in map")[*c]
+                .iter()
+                .map(|dir| dir.id())
+                .chain(std::iter::once(4))
+                .collect(),
+        );
         pos = *c;
     }
-    let dirpad1_dirs = dirpad1_dirs;
-
-    let mut dirpad2_dirs: Vec<usize> = Vec::with_capacity(3 * dirpad1_dirs.len());
-    let mut pos = 4; // starting at button A
-    for c in &dirpad1_dirs {
-        for dir in &dirpad_paths
-            .get(&pos)
-            .expect("expected all dirpad paths in map")[*c]
-        {
-            dirpad2_dirs.push(dir.id());
-        }
-        dirpad2_dirs.push(4);
-        pos = *c;
-    }
-    dirpad2_dirs
+    dir_dirs
 }
 
 type Paths = Box<[Box<[Dir]>]>;
@@ -162,8 +190,8 @@ fn parse_code(line: &str) -> Option<Box<[usize]>> {
 enum Dir {
     Left,
     Down,
-    Right,
     Up,
+    Right,
 }
 
 impl Dir {
@@ -230,7 +258,7 @@ mod test {
         let codes = parse(EXAMPLE).expect("expected example input to parse");
 
         // when
-        let complexity = code_complexity(&codes);
+        let complexity = code_complexity(&codes, 2);
 
         // then
         assert_eq!(complexity, 126384);
