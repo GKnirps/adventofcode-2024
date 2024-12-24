@@ -12,10 +12,42 @@ fn main() -> Result<(), String> {
     let content = read_to_string(Path::new(&filename)).map_err(|e| e.to_string())?;
     let (inputs, gates) = parse(&content)?;
 
-    let output = calculate_output_number(&gates, inputs);
+    let output = calculate_output_number(&gates, inputs.clone());
     println!("The number output on the 'z' wires is {output}");
 
+    print_graphviz_graph(&gates);
+
+    let swapped_wires = find_wrong_pairs(&gates, &inputs);
+    println!("The names of the swapped wires are {swapped_wires}");
+
     Ok(())
+}
+
+fn find_wrong_pairs(gates: &[Operation], input_values: &HashMap<&str, bool>) -> String {
+    // screw this. It's christmas eve and I have no time. I'll just look at the graph and debug the
+    // wires manually
+    "<not implemented yet>".to_owned()
+}
+
+fn print_graphviz_graph(gates: &[Operation]) {
+    println!("digraph {{");
+
+    let mut op_counter = 0;
+    for (input1, input2, gate, output) in gates {
+        let op_name = match gate {
+            Gate::And => "AND",
+            Gate::Or => "OR",
+            Gate::Xor => "XOR",
+        };
+        let op_node_name = format!("{op_name}_{op_counter}");
+        op_counter += 1;
+        println!("{op_node_name} [label = \"{op_name}\"];");
+        println!("{input1} -> {op_node_name};");
+        println!("{input2} -> {op_node_name};");
+        println!("{op_node_name} -> {output};");
+    }
+
+    println!("}}");
 }
 
 fn calculate_output_number(gates: &[Operation], input_values: HashMap<&str, bool>) -> u64 {
